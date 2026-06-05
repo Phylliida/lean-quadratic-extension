@@ -69,6 +69,58 @@ theorem norm_cross' {d a₁ b₁ a₂ b₂ : F} (hd : 0 ≤ d)
   have hsq := norm_cross_sq' hd h1 h2
   nlinarith [hsq, hbb, haa]
 
+/-- Cross inequality `a₂ b₁ ≤ a₁ b₂` for a C2 factor `(a₁,b₁)` and C3 factor
+`(a₂,b₂)`, from `(a₁b₂)² − (a₂b₁)² = b₂²(a₁²−db₁²) + b₁²(db₂²−a₂²)`. -/
+theorem cross_c2c3 {d a₁ b₁ a₂ b₂ : F} (hd : 0 ≤ d)
+    (ha1 : 0 ≤ a₁) (hb1 : b₁ < 0) (hn1 : d * b₁ ^ 2 ≤ a₁ ^ 2)
+    (ha2 : a₂ < 0) (hb2 : 0 < b₂) (hn2 : a₂ ^ 2 ≤ d * b₂ ^ 2) :
+    a₂ * b₁ ≤ a₁ * b₂ := by
+  nlinarith [mul_nonneg (sq_nonneg b₂) (sub_nonneg.mpr hn1),
+             mul_nonneg (sq_nonneg b₁) (sub_nonneg.mpr hn2),
+             mul_nonneg ha1 hb2.le, mul_pos_of_neg_of_neg ha2 hb1]
+
+set_option maxHeartbeats 1000000 in
+/-- **The hard case**: C2 + C3 closure. Verus needed four sub-lemmas here
+(`c2c3_norm_bound`, `c2c3_neg_norm_bound`, `case4_contradiction`,
+`iszero_sum_im_implies_nonneg_sum_re`); we mirror that with a 4-way sign split
+on `A := a₁+a₂`, `B := b₁+b₂`, each closed by the hand-derived `b²·G` identity. -/
+theorem nonneg_add_c2c3 {d a₁ b₁ a₂ b₂ : F} (hd : 0 ≤ d)
+    (ha1 : 0 ≤ a₁) (hb1 : b₁ < 0) (hn1 : d * b₁ ^ 2 ≤ a₁ ^ 2)
+    (ha2 : a₂ < 0) (hb2 : 0 < b₂) (hn2 : a₂ ^ 2 ≤ d * b₂ ^ 2) :
+    Nonneg d (a₁ + a₂) (b₁ + b₂) := by
+  have hcross := cross_c2c3 hd ha1 hb1 hn1 ha2 hb2 hn2
+  have hb1sq : 0 < b₁ * b₁ := mul_pos_of_neg_of_neg hb1 hb1
+  have hb2sq : 0 < b₂ * b₂ := mul_pos hb2 hb2
+  have hd' : 0 < d := by nlinarith [hn2, hb2sq, mul_pos_of_neg_of_neg ha2 ha2]
+  rcases le_or_gt 0 (a₁ + a₂) with hA | hA
+  · rcases le_or_gt 0 (b₁ + b₂) with hB | hB
+    · exact Or.inl ⟨hA, hB⟩                                  -- L
+    · -- M :  d B² ≤ A².   b₁²·G = (a₁²−db₁²)B² + (a₁b₂−a₂b₁)(−b₁A − a₁B)
+      refine Or.inr (Or.inl ⟨hA, hB, ?_⟩)
+      have hfac : 0 ≤ -b₁ * (a₁ + a₂) - a₁ * (b₁ + b₂) := by
+        nlinarith [mul_nonneg (show (0:F) ≤ -b₁ by linarith) hA,
+                   mul_nonneg ha1 (show (0:F) ≤ -(b₁ + b₂) by linarith)]
+      nlinarith [mul_nonneg (sub_nonneg.mpr hn1) (sq_nonneg (b₁ + b₂)),
+                 mul_nonneg (sub_nonneg.mpr hcross) hfac, hb1sq]
+  · -- A < 0  ⟹  0 < B,  then  A² ≤ d B².
+    have hBpos : 0 < b₁ + b₂ := by
+      have ha_sq : a₁ ^ 2 < a₂ ^ 2 := by
+        nlinarith [mul_pos (show (0:F) < -a₂ - a₁ by linarith)
+                           (show (0:F) < -a₂ + a₁ by linarith)]
+      have hbb_sq : b₁ ^ 2 < b₂ ^ 2 := by nlinarith [hn1, hn2, ha_sq, hd']
+      rcases le_or_gt (b₁ + b₂) 0 with h | h
+      · exfalso
+        nlinarith [hbb_sq, mul_nonneg (show (0:F) ≤ -b₁ - b₂ by linarith)
+                                      (show (0:F) ≤ -b₁ + b₂ by linarith)]
+      · exact h
+    refine Or.inr (Or.inr ⟨hA, hBpos, ?_⟩)
+    -- R :  A² ≤ d B².   b₂²·G' = (db₂²−a₂²)B² + (a₁b₂−a₂b₁)(−a₂B − b₂A)
+    have hfac' : 0 ≤ -a₂ * (b₁ + b₂) - b₂ * (a₁ + a₂) := by
+      nlinarith [mul_nonneg (show (0:F) ≤ -a₂ by linarith) hBpos.le,
+                 mul_nonneg hb2.le (show (0:F) ≤ -(a₁ + a₂) by linarith)]
+    nlinarith [mul_nonneg (sub_nonneg.mpr hn2) (sq_nonneg (b₁ + b₂)),
+               mul_nonneg (sub_nonneg.mpr hcross) hfac', hb2sq]
+
 set_option maxHeartbeats 1000000 in
 /-- **The positive cone is closed under addition.**
 Verus: `lemma_dts_nonneg_add_closed_fuel` (+ `_remaining`, ~470 lines).
@@ -112,7 +164,7 @@ theorem nonneg_add {d a₁ b₁ a₂ b₂ : F} (hd : 0 ≤ d)
     have hc := norm_cross hd hn1 hn2 hbb (mul_nonneg ha1 ha2)
     nlinarith [hn1, hn2, hc]
   · -- C2 + C3  *** the hard case (Verus: lemma_dts_c2c3_*) ***
-    sorry
+    exact nonneg_add_c2c3 hd ha1 hb1 hn1 ha2 hb2 hn2
   · -- C3 + C1  (mirror of C1 + C3)
     rcases le_or_gt 0 (a₁ + a₂) with hA | hA
     · exact Or.inl ⟨hA, by linarith⟩
@@ -120,8 +172,9 @@ theorem nonneg_add {d a₁ b₁ a₂ b₂ : F} (hd : 0 ≤ d)
       have hkey : 0 ≤ a₂ * (-(a₂ + 2 * a₁)) := mul_nonneg ha2 (by linarith)
       have hb1b2 : 0 ≤ d * b₁ * b₂ := mul_nonneg (mul_nonneg hd (le_of_lt hb1)) hb2
       nlinarith [hn1, hkey, hb1b2, mul_nonneg hd (sq_nonneg b₂)]
-  · -- C3 + C2  (mirror of C2 + C3) *** the hard case ***
-    sorry
+  · -- C3 + C2  (mirror of C2 + C3): swap factors, reuse via commutativity
+    have h := nonneg_add_c2c3 hd ha2 hb2 hn2 ha1 hb1 hn1
+    rwa [add_comm a₂ a₁, add_comm b₂ b₁] at h
   · -- C3 + C3
     refine Or.inr (Or.inr ⟨by linarith, by linarith, ?_⟩)
     have hbb : 0 ≤ d * b₁ * b₂ := mul_nonneg (mul_nonneg hd (le_of_lt hb1)) (le_of_lt hb2)
